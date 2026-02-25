@@ -1,0 +1,85 @@
+You are an expert Frontend Engineer. Build a clean, modern, and lightweight web frontend for a hackathon project called **AI Secure Digital Identity Verifier**.
+
+🎯 Goal:
+Create a functional prototype UI (not over-designed) that allows users to upload an identity document image, send it to a backend API, and display AI verification results clearly.
+
+⚠️ Important Rules:
+
+* Keep the UI SIMPLE, FAST, and HACKATHON-READY.
+* Do NOT add unnecessary animations or complex frameworks.
+* Code must be clean, modular, and easy to connect with a Spring Boot backend.
+* Assume backend endpoint:
+  POST /api/verify
+* Response example:
+  {
+  "riskLevel": "HIGH RISK",
+  "riskScore": 82,
+  "explanation": [
+  "Image tampering detected",
+  "Duplicate hash match"
+  ],
+  "extractedData": {
+  "name": "Demo User",
+  "idNumber": "XXXX1234",
+  "dob": "01-01-2000"
+  }
+  }
+
+🧱 Tech Requirements:
+
+* Use React (Vite) OR simple HTML/CSS/JS if React not possible.
+* Use Bootstrap or minimal modern CSS.
+* Mobile responsive layout.
+* Dark-light neutral professional theme (cybersecurity style).
+
+📄 Pages / Components Required:
+
+1️⃣ Upload Screen
+
+* Project title at top: “AI Secure Digital Identity Verifier”
+* Drag & drop or file upload input
+* Upload button
+* Loading indicator while processing
+
+2️⃣ Result Screen
+Show in clean cards:
+
+* Risk Level badge (color based)
+* Risk Score progress bar
+* Extracted Data section
+* Explanation list (bullet points)
+
+3️⃣ Navigation
+
+* Simple top navbar
+* Logo text only (no images needed)
+
+⚙️ Functional Requirements:
+
+* When user uploads file → send multipart/form-data request to:
+  http://localhost:8080/api/verify
+* Show loading spinner until response arrives.
+* Render results dynamically.
+* Handle error states gracefully.
+
+🎨 Design Guidelines:
+
+* Cybersecurity dashboard feel
+* Rounded cards
+* Clear typography
+* No heavy UI libraries
+
+📁 Project Structure:
+src/
+components/
+pages/
+services/api.js
+App.jsx
+
+🧠 Extra (if possible):
+
+* Add Admin Dashboard mock section (static charts allowed).
+* Use reusable components.
+
+Output:
+Provide FULL working frontend code with clear file structure and comments so it can run immediately after `npm install && npm run dev`.
