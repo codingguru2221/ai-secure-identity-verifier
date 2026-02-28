@@ -3,9 +3,9 @@
  * Handles communication with the backend API
  */
 
-// Base API URL
-// If env variable exists use it, otherwise use /api (proxy through express)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+// Backend API URL
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://18.212.249.8:8080/api";
 
 /**
  * Check backend health
