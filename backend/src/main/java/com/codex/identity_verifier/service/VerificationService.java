@@ -98,41 +98,72 @@ public class VerificationService {
                                   Map<String, String> identityInfo) {
         int baseScore = 0;
         
-        // Factor 1: No face detected increases risk
+        // Factor 1: Face detection analysis
         if (!(Boolean) faceDetectionResult.getOrDefault("isFaceDetected", false)) {
-            baseScore += 30; // High risk if no face detected in ID photo
+            baseScore += 35; // High risk if no face detected in ID photo
+        } else {
+            // Check face quality if face is detected
+            Integer faceCount = (Integer) faceDetectionResult.get("faceCount");
+            if (faceCount != null && faceCount > 1) {
+                baseScore += 15; // Multiple faces may indicate document issues
+            }
         }
         
-        // Factor 2: Tampering detected significantly increases risk
+        // Factor 2: Tampering detection (highest weight)
         if ((Boolean) tamperDetectionResult.getOrDefault("isTampered", false)) {
-            baseScore += 50; // Very high risk if tampering detected
+            baseScore += 60; // Very high risk if tampering detected
         }
         
-        // Factor 3: Low image quality increases risk
+        // Factor 3: Image quality analysis
         @SuppressWarnings("unchecked")
         Map<String, Boolean> qualityIndicators = (Map<String, Boolean>) qualityAnalysisResult.getOrDefault("qualityIndicators", Map.of());
         if (qualityIndicators.getOrDefault("isBlurry", false)) {
-            baseScore += 20; // Blur increases risk
+            baseScore += 25; // Blur significantly increases risk
+        }
+        
+        if (!qualityIndicators.getOrDefault("hasGoodLighting", false)) {
+            baseScore += 10; // Poor lighting affects analysis accuracy
         }
         
         if (qualityIndicators.getOrDefault("isDocument", false)) {
-            baseScore -= 10; // Document type decreases risk slightly
+            baseScore -= 15; // Document type decreases risk
         }
         
-        // Factor 4: Missing critical identity info increases risk
+        // Factor 4: Identity information completeness
+        int missingFields = 0;
         if (identityInfo.get("name") == null || identityInfo.get("name").isEmpty()) {
-            baseScore += 15;
+            missingFields++;
+            baseScore += 20; // Name is critical
         }
         if (identityInfo.get("idNumber") == null || identityInfo.get("idNumber").isEmpty()) {
-            baseScore += 10;
+            missingFields++;
+            baseScore += 25; // ID number is very critical
         }
         if (identityInfo.get("dob") == null || identityInfo.get("dob").isEmpty()) {
-            baseScore += 5;
+            missingFields++;
+            baseScore += 10; // DOB is important
         }
         
-        // Factor 5: Check for suspicious content
+        // Bonus for complete information
+        if (missingFields == 0) {
+            baseScore -= 20; // All fields present
+        }
+        
+        // Factor 5: Suspicious content detection
         if ((Boolean) tamperDetectionResult.getOrDefault("hasSuspiciousContent", false)) {
-            baseScore += 25;
+            baseScore += 30;
+        }
+        
+        // Factor 6: Image dimensions (too small/large can be suspicious)
+        Integer width = (Integer) tamperDetectionResult.get("width");
+        Integer height = (Integer) tamperDetectionResult.get("height");
+        if (width != null && height != null) {
+            int totalPixels = width * height;
+            if (totalPixels < 100000) { // Very low resolution
+                baseScore += 20;
+            } else if (totalPixels > 20000000) { // Extremely high resolution (suspicious)
+                baseScore += 10;
+            }
         }
         
         // Ensure score stays within bounds
@@ -163,8 +194,13 @@ public class VerificationService {
         List<String> explanations = new ArrayList<>();
         
         // Face detection results
+        Integer faceCount = (Integer) faceDetectionResult.get("faceCount");
         if ((Boolean) faceDetectionResult.getOrDefault("isFaceDetected", false)) {
-            explanations.add("Face detected in document: " + faceDetectionResult.get("faceCount") + " face(s) found");
+            if (faceCount != null && faceCount > 1) {
+                explanations.add("Face detection: Multiple faces (" + faceCount + ") detected - may indicate document issues");
+            } else {
+                explanations.add("Face detection: Single face detected - positive indicator");
+            }
         } else {
             explanations.add("WARNING: No face detected in document - potential fraud indicator");
         }
@@ -173,37 +209,57 @@ public class VerificationService {
         if ((Boolean) tamperDetectionResult.getOrDefault("isTampered", false)) {
             explanations.add("ALERT: Potential tampering detected in document");
         } else {
-            explanations.add("Document integrity check: No obvious signs of tampering");
+            explanations.add("Document integrity check: No obvious signs of tampering detected");
         }
         
         // Quality results
         @SuppressWarnings("unchecked")
         Map<String, Boolean> qualityIndicators = (Map<String, Boolean>) qualityAnalysisResult.getOrDefault("qualityIndicators", Map.of());
         if (qualityIndicators.getOrDefault("isBlurry", false)) {
-            explanations.add("Image quality assessment: Low quality, potentially affecting accuracy");
+            explanations.add("Image quality assessment: Low quality detected - may affect analysis accuracy");
         } else {
             explanations.add("Image quality assessment: Good quality for analysis");
+        }
+        
+        if (!qualityIndicators.getOrDefault("hasGoodLighting", false)) {
+            explanations.add("Lighting conditions: Poor lighting detected - may impact OCR accuracy");
         }
         
         // Identity info extraction
         if (identityInfo.get("name") != null && !identityInfo.get("name").isEmpty()) {
             explanations.add("Name extracted: " + identityInfo.get("name"));
         } else {
-            explanations.add("Name extraction: Failed to extract name from document");
+            explanations.add("Name extraction: Failed to extract name from document - critical information missing");
         }
         
         if (identityInfo.get("idNumber") != null && !identityInfo.get("idNumber").isEmpty()) {
             explanations.add("ID number extracted: " + identityInfo.get("idNumber"));
         } else {
-            explanations.add("ID number extraction: Failed to extract ID number from document");
+            explanations.add("ID number extraction: Failed to extract ID number from document - critical information missing");
         }
         
-        if (riskScore >= 70) {
-            explanations.add("Final risk assessment: HIGH RISK - Manual review recommended");
-        } else if (riskScore >= 30) {
-            explanations.add("Final risk assessment: MEDIUM RISK - Additional verification may be needed");
+        if (identityInfo.get("dob") != null && !identityInfo.get("dob").isEmpty()) {
+            explanations.add("Date of birth extracted: " + identityInfo.get("dob"));
         } else {
-            explanations.add("Final risk assessment: LOW RISK - Document appears authentic");
+            explanations.add("Date of birth extraction: Failed to extract DOB from document");
+        }
+        
+        // Risk assessment
+        if (riskScore >= 80) {
+            explanations.add("Final risk assessment: HIGH RISK - Strong indicators of potential fraud detected");
+            explanations.add("RECOMMENDATION: Immediate manual review and additional verification required");
+        } else if (riskScore >= 60) {
+            explanations.add("Final risk assessment: HIGH-MEDIUM RISK - Significant concerns detected");
+            explanations.add("RECOMMENDATION: Enhanced verification procedures recommended");
+        } else if (riskScore >= 40) {
+            explanations.add("Final risk assessment: MEDIUM RISK - Moderate concerns identified");
+            explanations.add("RECOMMENDATION: Additional verification may be needed");
+        } else if (riskScore >= 20) {
+            explanations.add("Final risk assessment: LOW-MEDIUM RISK - Minor concerns identified");
+            explanations.add("RECOMMENDATION: Standard verification procedures sufficient");
+        } else {
+            explanations.add("Final risk assessment: LOW RISK - Document appears authentic and complete");
+            explanations.add("RECOMMENDATION: Standard processing approved");
         }
         
         return explanations;

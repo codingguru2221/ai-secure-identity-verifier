@@ -9,20 +9,86 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Activity, ShieldAlert, CheckCircle, Search, Filter } from "lucide-react";
+import { Activity, ShieldAlert, CheckCircle, Search, Filter, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 
-// Mock data for the admin dashboard since we don't have a GET endpoint defined
-const MOCK_SCANS = [
-  { id: "SCAN-8X92-A", date: "2023-10-27 14:32:01", name: "John Doe", type: "Passport", risk: "Low", score: 12 },
-  { id: "SCAN-4B11-C", date: "2023-10-27 13:15:44", name: "Jane Smith", type: "Driver License", risk: "Medium", score: 45 },
-  { id: "SCAN-9Z77-F", date: "2023-10-27 11:05:12", name: "UNKNOWN", type: "National ID", risk: "High", score: 92 },
-  { id: "SCAN-1A22-D", date: "2023-10-26 16:44:33", name: "Robert Robert", type: "Passport", risk: "Low", score: 5 },
-  { id: "SCAN-5M33-E", date: "2023-10-26 09:21:10", name: "Alice Wonderland", type: "Driver License", risk: "High", score: 88 },
-];
+interface VerificationRecord {
+  id: string;
+  fileName: string;
+  createdAt: string;
+  riskLevel: string;
+  riskScore: number;
+  extractedData: {
+    name: string;
+    idNumber: string;
+    dob: string;
+  };
+}
+
+interface StatsData {
+  totalVerifications: number;
+  lowRiskCount: number;
+  mediumRiskCount: number;
+  highRiskCount: number;
+  averageRiskScore: number;
+  riskDistribution: {
+    low: number;
+    medium: number;
+    high: number;
+  };
+}
 
 export default function AdminDashboard() {
+  const [records, setRecords] = useState<VerificationRecord[]>([]);
+  const [stats, setStats] = useState<StatsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080/api';
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/stats`);
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch stats:', err);
+    }
+  };
+
+  const fetchVerifications = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/verifications?limit=50`);
+      if (response.ok) {
+        const data = await response.json();
+        setRecords(data);
+        setError(null);
+      } else {
+        setError('Failed to load verification records');
+      }
+    } catch (err) {
+      setError('Failed to connect to backend service');
+      console.error('Failed to fetch verifications:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStats();
+    fetchVerifications();
+  }, []);
+
+  const handleRefresh = () => {
+    fetchStats();
+    fetchVerifications();
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -33,30 +99,52 @@ export default function AdminDashboard() {
             <h1 className="text-3xl font-display font-bold">Command Center</h1>
             <p className="text-muted-foreground mt-1">Real-time overview of verification activities</p>
           </div>
-          <div className="hidden md:flex items-center gap-2 bg-primary/10 text-primary px-3 py-1.5 rounded-full border border-primary/20 text-sm font-mono">
-            <Activity className="w-4 h-4 animate-pulse" />
-            SYSTEM_ONLINE
+          <div className="flex items-center gap-4">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefresh}
+              disabled={loading}
+              className="border-border/50"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <div className="hidden md:flex items-center gap-2 bg-primary/10 text-primary px-3 py-1.5 rounded-full border border-primary/20 text-sm font-mono">
+              <Activity className="w-4 h-4 animate-pulse" />
+              SYSTEM_ONLINE
+            </div>
           </div>
         </div>
 
         {/* Top metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card className="p-6 glass-panel cyber-border">
-            <h3 className="text-sm font-mono text-muted-foreground mb-2">Total Scans (24h)</h3>
-            <p className="text-4xl font-display font-bold">1,284</p>
-            <p className="text-xs text-success mt-2 flex items-center gap-1">
-              <span className="font-bold">+12.5%</span> vs yesterday
+            <h3 className="text-sm font-mono text-muted-foreground mb-2">Total Verifications</h3>
+            <p className="text-4xl font-display font-bold">
+              {stats ? stats.totalVerifications : '0'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              All time verifications processed
             </p>
           </Card>
           <Card className="p-6 glass-panel border-success/30 bg-success/5">
-            <h3 className="text-sm font-mono text-success/80 mb-2">Passed Verification</h3>
-            <p className="text-4xl font-display font-bold text-success">1,102</p>
-            <p className="text-xs text-muted-foreground mt-2">85.8% clear rate</p>
+            <h3 className="text-sm font-mono text-success/80 mb-2">Low Risk</h3>
+            <p className="text-4xl font-display font-bold text-success">
+              {stats ? stats.lowRiskCount : '0'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              {stats ? `${Math.round((stats.lowRiskCount / Math.max(stats.totalVerifications, 1)) * 100)}% clear rate` : '0% clear rate'}
+            </p>
           </Card>
           <Card className="p-6 glass-panel border-destructive/30 bg-destructive/5 cyber-glow-destructive">
-            <h3 className="text-sm font-mono text-destructive/80 mb-2">Flagged High Risk</h3>
-            <p className="text-4xl font-display font-bold text-destructive">47</p>
-            <p className="text-xs text-muted-foreground mt-2">Requires manual review</p>
+            <h3 className="text-sm font-mono text-destructive/80 mb-2">High Risk</h3>
+            <p className="text-4xl font-display font-bold text-destructive">
+              {stats ? stats.highRiskCount : '0'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              Requires manual review
+            </p>
           </Card>
         </div>
 
@@ -79,48 +167,70 @@ export default function AdminDashboard() {
           </div>
           
           <div className="overflow-x-auto">
-            <Table>
-              <TableHeader className="bg-background/40 hover:bg-background/40">
-                <TableRow className="border-border/50">
-                  <TableHead className="font-mono text-xs text-muted-foreground">SCAN ID</TableHead>
-                  <TableHead className="font-mono text-xs text-muted-foreground">TIMESTAMP</TableHead>
-                  <TableHead className="font-mono text-xs text-muted-foreground">EXTRACTED NAME</TableHead>
-                  <TableHead className="font-mono text-xs text-muted-foreground">DOC TYPE</TableHead>
-                  <TableHead className="font-mono text-xs text-muted-foreground">RISK LEVEL</TableHead>
-                  <TableHead className="font-mono text-xs text-muted-foreground text-right">ACTION</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {MOCK_SCANS.map((scan) => (
-                  <TableRow key={scan.id} className="border-border/50 hover:bg-secondary/20 transition-colors">
-                    <TableCell className="font-mono text-xs text-primary">{scan.id}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{scan.date}</TableCell>
-                    <TableCell className="font-medium">{scan.name}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{scan.type}</TableCell>
-                    <TableCell>
-                      {scan.risk === 'High' ? (
-                        <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 gap-1">
-                          <ShieldAlert className="w-3 h-3" /> High ({scan.score})
-                        </Badge>
-                      ) : scan.risk === 'Medium' ? (
-                        <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20 gap-1">
-                          <Activity className="w-3 h-3" /> Medium ({scan.score})
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-success/10 text-success border-success/20 gap-1">
-                          <CheckCircle className="w-3 h-3" /> Low ({scan.score})
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-primary">
-                        View Details
-                      </Button>
-                    </TableCell>
+            {loading ? (
+              <div className="p-8 text-center text-muted-foreground">
+                <Activity className="w-8 h-8 animate-spin mx-auto mb-2" />
+                <p>Loading verification records...</p>
+              </div>
+            ) : error ? (
+              <div className="p-8 text-center text-destructive">
+                <p>{error}</p>
+                <Button variant="outline" size="sm" className="mt-2" onClick={handleRefresh}>
+                  Retry
+                </Button>
+              </div>
+            ) : records.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground">
+                <p>No verification records found</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader className="bg-background/40 hover:bg-background/40">
+                  <TableRow className="border-border/50">
+                    <TableHead className="font-mono text-xs text-muted-foreground">VERIFICATION ID</TableHead>
+                    <TableHead className="font-mono text-xs text-muted-foreground">TIMESTAMP</TableHead>
+                    <TableHead className="font-mono text-xs text-muted-foreground">EXTRACTED NAME</TableHead>
+                    <TableHead className="font-mono text-xs text-muted-foreground">FILE NAME</TableHead>
+                    <TableHead className="font-mono text-xs text-muted-foreground">RISK LEVEL</TableHead>
+                    <TableHead className="font-mono text-xs text-muted-foreground text-right">SCORE</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {records.map((record) => (
+                    <TableRow key={record.id} className="border-border/50 hover:bg-secondary/20 transition-colors">
+                      <TableCell className="font-mono text-xs text-primary">{record.id.substring(0, 12)}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {new Date(record.createdAt).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {record.extractedData?.name || 'NOT EXTRACTED'}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm truncate max-w-[150px]">
+                        {record.fileName}
+                      </TableCell>
+                      <TableCell>
+                        {record.riskLevel === 'HIGH RISK' ? (
+                          <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 gap-1">
+                            <ShieldAlert className="w-3 h-3" /> High ({record.riskScore})
+                          </Badge>
+                        ) : record.riskLevel === 'MEDIUM RISK' ? (
+                          <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20 gap-1">
+                            <Activity className="w-3 h-3" /> Medium ({record.riskScore})
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-success/10 text-success border-success/20 gap-1">
+                            <CheckCircle className="w-3 h-3" /> Low ({record.riskScore})
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm font-medium">
+                        {record.riskScore}%
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </div>
         </Card>
       </main>

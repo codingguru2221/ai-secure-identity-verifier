@@ -124,10 +124,18 @@ public class DynamoDBService {
         DynamoDbTable<VerificationRecord> verificationTable = enhancedClient
                 .table(tableName, TableSchema.fromBean(VerificationRecord.class));
 
-        return verificationTable.getItem(Key.builder()
-                .partitionValue(id)
-                .sortValue(Instant.now().toString()) // This is a simplification; in practice you'd need the exact timestamp
-                .build());
+        // For demo purposes, we'll scan for the record since we don't have the exact timestamp
+        // In production, you'd want to use a GSI or store the timestamp separately
+        try {
+            return verificationTable.scan()
+                .items()
+                .stream()
+                .filter(record -> id.equals(record.getId()))
+                .findFirst()
+                .orElse(null);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -141,9 +149,14 @@ public class DynamoDBService {
 
         // For this implementation, we'll use a scan operation
         // In a production environment, you'd want to use a query with a GSI
-        java.util.List<VerificationRecord> result = new java.util.ArrayList<>();
-        verificationTable.scan(r -> r.limit(limit)).items().iterator().forEachRemaining(result::add);
-        return result;
+        try {
+            java.util.List<VerificationRecord> result = new java.util.ArrayList<>();
+            verificationTable.scan(r -> r.limit(limit)).items().iterator().forEachRemaining(result::add);
+            return result;
+        } catch (Exception e) {
+            // Return empty list if there's an error
+            return new java.util.ArrayList<>();
+        }
     }
 
     /**

@@ -1,11 +1,19 @@
 package com.codex.identity_verifier.controller;
 
 import com.codex.identity_verifier.dto.VerificationResponse;
+import com.codex.identity_verifier.model.VerificationRecord;
 import com.codex.identity_verifier.service.VerificationService;
+import com.codex.identity_verifier.service.DynamoDBService;
+import com.codex.identity_verifier.util.InputValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api")
@@ -14,28 +22,111 @@ public class VerificationController {
 
     @Autowired
     private VerificationService verificationService;
+    
+    @Autowired
+    private DynamoDBService dynamoDBService;
 
     @PostMapping("/verify")
-    public ResponseEntity<VerificationResponse> verifyDocument(@RequestParam("file") MultipartFile file) {
-        // Validate file presence
-        if (file.isEmpty()) {
-            throw new IllegalArgumentException("File cannot be empty");
-        }
+    public ResponseEntity<VerificationResponse> verifyDocument(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "documentType", required = false) String documentType) {
+        
+        try {
+            // Validate file using input validator
+            InputValidator.ValidationResult fileValidation = InputValidator.validateFile(file);
+            if (!fileValidation.isValid()) {
+                return ResponseEntity.badRequest()
+                    .body(VerificationResponse.builder()
+                        .riskLevel("ERROR")
+                        .riskScore(100)
+                        .explanation(List.of(fileValidation.getErrorMessage()))
+                        .build());
+            }
 
-        // Validate file type (basic validation)
-        String contentType = file.getContentType();
-        if (!isValidFileType(contentType)) {
-            throw new IllegalArgumentException("Invalid file type. Only images and PDFs are allowed.");
-        }
+            // Sanitize document type if provided
+            String sanitizedDocumentType = null;
+            if (documentType != null) {
+                sanitizedDocumentType = InputValidator.sanitizeInput(documentType);
+            }
 
-        // Process the file using the service
-        VerificationResponse response = verificationService.verifyDocument(file);
-        return ResponseEntity.ok(response);
+            // Process the file using the service
+            VerificationResponse response = verificationService.verifyDocument(file);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                .body(VerificationResponse.builder()
+                    .riskLevel("ERROR")
+                    .riskScore(100)
+                    .explanation(List.of("Verification failed: " + e.getMessage()))
+                    .build());
+        }
+    }
+
+    @GetMapping("/verifications")
+    public ResponseEntity<List<VerificationRecord>> getAllVerifications(
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        try {
+            List<VerificationRecord> records = dynamoDBService.getRecentVerifications(limit);
+            return ResponseEntity.ok(records);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/verifications/{id}")
+    public ResponseEntity<VerificationRecord> getVerificationById(@PathVariable String id) {
+        try {
+            VerificationRecord record = dynamoDBService.getVerificationRecordById(id);
+            if (record != null) {
+                return ResponseEntity.ok(record);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<Map<String, Object>> getVerificationStats() {
+        try {
+            List<VerificationRecord> records = dynamoDBService.getRecentVerifications(1000);
+            
+            long totalVerifications = records.size();
+            long lowRisk = records.stream().filter(r -> "LOW RISK".equals(r.getRiskLevel())).count();
+            long mediumRisk = records.stream().filter(r -> "MEDIUM RISK".equals(r.getRiskLevel())).count();
+            long highRisk = records.stream().filter(r -> "HIGH RISK".equals(r.getRiskLevel())).count();
+            
+            double avgRiskScore = records.stream()
+                .mapToInt(VerificationRecord::getRiskScore)
+                .average()
+                .orElse(0.0);
+            
+            Map<String, Object> stats = new HashMap<>();
+            stats.put("totalVerifications", totalVerifications);
+            stats.put("lowRiskCount", lowRisk);
+            stats.put("mediumRiskCount", mediumRisk);
+            stats.put("highRiskCount", highRisk);
+            stats.put("averageRiskScore", Math.round(avgRiskScore * 100.0) / 100.0);
+            stats.put("riskDistribution", Map.of(
+                "low", lowRisk,
+                "medium", mediumRisk,
+                "high", highRisk
+            ));
+            
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     private boolean isValidFileType(String contentType) {
         return contentType != null && (
-            contentType.startsWith("image/") || 
+            contentType.equals("image/jpeg") ||
+            contentType.equals("image/jpg") ||
+            contentType.equals("image/png") ||
+            contentType.equals("image/webp") ||
             contentType.equals("application/pdf")
         );
     }
