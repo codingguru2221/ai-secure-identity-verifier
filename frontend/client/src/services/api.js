@@ -5,7 +5,7 @@
 
 /*
 Vite environment variables use import.meta.env
-If not defined, fallback to same server API route
+Fallback to "/api" so frontend and backend work on same server
 */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
@@ -14,12 +14,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
  */
 export const healthCheck = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/health`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await fetch(`${API_BASE_URL}/health`);
 
     if (!response.ok) {
       throw new Error(`Health check failed with status ${response.status}`);
@@ -56,6 +51,42 @@ export const verifyDocument = async (file) => {
     return await response.json();
   } catch (error) {
     console.error("Verification error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get recent verification records
+ */
+export const getVerifications = async (limit = 50) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/verifications?limit=${limit}`);
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch verification records");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Fetch verifications error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get verification statistics
+ */
+export const getStats = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/stats`);
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch statistics");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Fetch stats error:", error);
     throw error;
   }
 };
