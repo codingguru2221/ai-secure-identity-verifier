@@ -5,7 +5,7 @@ import com.codex.identity_verifier.model.VerificationRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-
+import java.util.Arrays;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -268,32 +268,40 @@ public class VerificationService {
     /**
      * Creates a verification record for storage in DynamoDB
      */
-    private VerificationRecord createVerificationRecord(String fileName, String s3Key, 
-                                                      String riskLevel, int riskScore,
-                                                      String[] explanations,
-                                                      Map<String, String> identityInfo,
-                                                      Double faceMatchConfidence,
-                                                      Boolean isTampered) {
-        VerificationRecord.ExtractedData extractedData = VerificationRecord.ExtractedData.builder()
-                .name(identityInfo.get("name"))
-                .idNumber(identityInfo.get("idNumber"))
-                .dob(identityInfo.get("dob"))
-                .address(identityInfo.get("address"))
-                .expiryDate(identityInfo.get("expiryDate"))
-                .build();
-        
-        return VerificationRecord.builder()
-                .fileName(fileName)
-                .s3Key(s3Key)
-                .s3Bucket(s3Service.getClass().getSimpleName()) // In real implementation, this would be the actual bucket name
-                .riskLevel(riskLevel)
-                .riskScore(riskScore)
-                .explanation(explanations)
-                .extractedData(extractedData)
-                .faceMatchConfidence(faceMatchConfidence)
-                .isTampered(isTampered)
-                .build();
-    }
+    private VerificationRecord createVerificationRecord(
+        String fileName,
+        String s3Key,
+        String riskLevel,
+        int riskScore,
+        String[] explanations,
+        Map<String, String> identityInfo,
+        Double faceMatchConfidence,
+        Boolean isTampered) {
+
+    VerificationRecord.ExtractedData extractedData =
+            VerificationRecord.ExtractedData.builder()
+                    .name(identityInfo.get("name"))
+                    .idNumber(identityInfo.get("idNumber"))
+                    .dob(identityInfo.get("dob"))
+                    .address(identityInfo.get("address"))
+                    .expiryDate(identityInfo.get("expiryDate"))
+                    .build();
+
+    // Convert String[] → List<String>
+    List<String> explanationList = Arrays.asList(explanations);
+
+    return VerificationRecord.builder()
+            .fileName(fileName)
+            .s3Key(s3Key)
+            .s3Bucket("secureverify-codex-identity") // your S3 bucket
+            .riskLevel(riskLevel)
+            .riskScore(riskScore)
+            .explanation(explanationList)
+            .extractedData(extractedData)
+            .faceMatchConfidence(faceMatchConfidence)
+            .isTampered(isTampered)
+            .build();
+}
 
     /**
      * Generates SHA-256 hash of the file content

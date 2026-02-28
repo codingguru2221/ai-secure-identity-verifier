@@ -19,7 +19,7 @@ import java.util.UUID;
 public class DynamoDBService {
 
     private final DynamoDbEnhancedClient enhancedClient;
-    @Value("${aws.dynamodb.table-name:verification-records}")
+    @Value("${aws.dynamodb.table-name:IdentityVerifications}")
     private String tableName;
 
     @Autowired
