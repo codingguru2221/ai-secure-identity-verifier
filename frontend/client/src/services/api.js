@@ -40,7 +40,7 @@ export const verifyDocument = async (file) => {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch(`${API_BASE_URL}/verify`, {
+    const response = await fetch(`${API_BASE_URL}/api/verify`, {
       method: 'POST',
       body: formData,
     });
