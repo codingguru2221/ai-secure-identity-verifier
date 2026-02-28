@@ -13,7 +13,7 @@ export function useVerifyIdentity() {
 
       // Using raw fetch here instead of apiRequest wrapper to easily handle FormData
       // which automatically sets the correct boundary headers.
-      const res = await fetch(`${API_BASE_URL}/verify`, {
+      const res = await fetch(`${API_BASE_URL}/api/verify`, {
         method: api.verification.verify.method,
         body: formData,
         // Omit Content-Type header so the browser sets it with the boundary automatically
