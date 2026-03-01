@@ -10,7 +10,7 @@ export async function registerRoutes(
   const backendUrl = process.env.BACKEND_URL || "http://18.212.249.8:8080";
 
   app.use(
-    "/api",
+    "/api/*",
     createProxyMiddleware({
       target: backendUrl,
       changeOrigin: true,
