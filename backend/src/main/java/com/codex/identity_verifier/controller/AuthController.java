@@ -29,8 +29,7 @@ public class AuthController {
             }
 
             InputValidator.ValidationResult usernameValidation = InputValidator.validateUsername(loginRequest.getUsername());
-            InputValidator.ValidationResult passwordValidation = InputValidator.validatePassword(loginRequest.getPassword());
-            if (!usernameValidation.isValid() || !passwordValidation.isValid()) {
+            if (!usernameValidation.isValid()) {
                 return ResponseEntity.badRequest().body(invalidRequestResponse);
             }
 
