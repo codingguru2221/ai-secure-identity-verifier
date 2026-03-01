@@ -1,11 +1,11 @@
 /**
  * Centralized API configuration.
- * If VITE_API_BASE_URL is omitted, requests use same-origin paths.
+ * Default backend target is EC2 backend.
  */
-const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").trim();
+const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://18.212.249.8:8080").trim();
 export const API_BASE_URL = rawApiBaseUrl.replace(/\/+$/, "");
 
-const apiUrl = (path: string) => (API_BASE_URL ? `${API_BASE_URL}${path}` : path);
+const apiUrl = (path: string) => `${API_BASE_URL}${path}`;
 
 export const API_ENDPOINTS = {
   HEALTH: apiUrl("/api/health"),
@@ -19,7 +19,7 @@ export const API_ENDPOINTS = {
 export const getEnvironmentInfo = () => ({
   isProduction: import.meta.env.PROD,
   isDevelopment: import.meta.env.DEV,
-  apiUrl: API_BASE_URL || "(same-origin)",
+  apiUrl: API_BASE_URL,
   isLocalhost: API_BASE_URL.includes("localhost") || API_BASE_URL.includes("127.0.0.1"),
   isAwsServer: API_BASE_URL.includes("amazonaws.com") || API_BASE_URL.includes("ec2"),
 });
@@ -42,11 +42,6 @@ export const validateApiConfig = (): boolean => {
   if (import.meta.env.PROD && envInfo.isLocalhost) {
     console.error("PRODUCTION ERROR: API is configured to use localhost");
     return false;
-  }
-
-  if (!API_BASE_URL || API_BASE_URL.trim() === "") {
-    console.log("API Configuration: using same-origin /api routes");
-    return true;
   }
 
   console.log(`API Configuration Valid - Environment: ${import.meta.env.MODE}`);
