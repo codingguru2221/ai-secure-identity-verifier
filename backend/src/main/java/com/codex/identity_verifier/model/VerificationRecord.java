@@ -22,6 +22,7 @@ public class VerificationRecord {
     private String id;
     private String fileName;
     private String fileHash;
+    private String ownerUsername;
     private String s3Bucket;
     private String s3Key;
     private Boolean s3ObjectDeleted;

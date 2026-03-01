@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { API_ENDPOINTS } from "@/config/api";
-import { authHeaders, clearAuthToken, getAuthToken, setAuthToken } from "@/lib/auth";
+import { authHeaders, clearAuthToken, getAuthSession, setAuthSession } from "@/lib/auth";
 
 interface VerificationRecord {
   id: string;
@@ -43,41 +43,54 @@ interface StatsData {
 }
 
 export default function AdminDashboard() {
+  const existingSession = getAuthSession();
   const [records, setRecords] = useState<VerificationRecord[]>([]);
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!getAuthToken());
-  const [username, setUsername] = useState("admin");
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!existingSession);
+  const [currentUser, setCurrentUser] = useState<string>(existingSession?.username ?? "");
+  const [role, setRole] = useState<string>(existingSession?.role ?? "USER");
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
   const logout = () => {
     clearAuthToken();
     setIsAuthenticated(false);
+    setCurrentUser("");
+    setRole("USER");
     setRecords([]);
     setStats(null);
   };
 
-  const login = async () => {
+  const authenticate = async () => {
     try {
       setAuthLoading(true);
       setError(null);
-      const response = await fetch(API_ENDPOINTS.LOGIN, {
+      const endpoint = authMode === "login" ? API_ENDPOINTS.LOGIN : API_ENDPOINTS.SIGNUP;
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
       const data = await response.json();
       if (!response.ok || !data?.token) {
-        setError("Login failed. Use admin credentials.");
+        setError(authMode === "login" ? "Login failed." : "Signup failed.");
         return;
       }
-      setAuthToken(data.token);
+      setAuthSession({
+        token: data.token,
+        username: data.username,
+        role: data.role ?? "USER",
+      });
+      setCurrentUser(data.username);
+      setRole(data.role ?? "USER");
       setIsAuthenticated(true);
       setPassword("");
     } catch {
-      setError("Login request failed");
+      setError("Authentication request failed");
     } finally {
       setAuthLoading(false);
     }
@@ -129,16 +142,51 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
+    const session = getAuthSession();
+    if (!session) {
+      setIsAuthenticated(false);
+      return;
+    }
+
+    fetch(API_ENDPOINTS.VALIDATE_TOKEN, { headers: authHeaders() })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error("Session invalid");
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data?.valid !== true) {
+          logout();
+          return;
+        }
+        setAuthSession({
+          token: session.token,
+          username: data?.username ?? session.username,
+          role: data?.role ?? session.role,
+        });
+        setCurrentUser(data?.username ?? session.username);
+        setRole(data?.role ?? session.role);
+        setIsAuthenticated(true);
+      })
+      .catch(() => logout());
+  }, []);
+
+  useEffect(() => {
     if (!isAuthenticated) {
       setLoading(false);
       return;
     }
-    fetchStats();
+    if (role === "ADMIN") {
+      fetchStats();
+    }
     fetchVerifications();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, role]);
 
   const handleRefresh = () => {
-    fetchStats();
+    if (role === "ADMIN") {
+      fetchStats();
+    }
     fetchVerifications();
   };
 
@@ -149,9 +197,11 @@ export default function AdminDashboard() {
       <main className="flex-1 container mx-auto px-4 py-8">
         {!isAuthenticated ? (
           <Card className="max-w-md mx-auto p-6 glass-panel cyber-border">
-            <h1 className="text-2xl font-display font-bold mb-2">Admin Login</h1>
+            <h1 className="text-2xl font-display font-bold mb-2">
+              {authMode === "login" ? "Login" : "Signup"}
+            </h1>
             <p className="text-sm text-muted-foreground mb-4">
-              Stats and records require admin token.
+              Your verification history is private and tied to your account.
             </p>
             <div className="space-y-3">
               <Input
@@ -166,8 +216,18 @@ export default function AdminDashboard() {
                 onChange={(e) => setPassword(e.target.value)}
               />
               {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button onClick={login} disabled={authLoading} className="w-full">
-                {authLoading ? "Signing in..." : "Sign In"}
+              <Button onClick={authenticate} disabled={authLoading} className="w-full">
+                {authLoading ? "Please wait..." : authMode === "login" ? "Sign In" : "Sign Up"}
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  setError(null);
+                  setAuthMode((prev) => (prev === "login" ? "signup" : "login"));
+                }}
+              >
+                {authMode === "login" ? "Create a new account" : "Already have an account? Sign in"}
               </Button>
             </div>
           </Card>
@@ -175,8 +235,12 @@ export default function AdminDashboard() {
         <>
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-display font-bold">Command Center</h1>
-            <p className="text-muted-foreground mt-1">Real-time overview of verification activities</p>
+            <h1 className="text-3xl font-display font-bold">
+              {role === "ADMIN" ? "Command Center" : "My Verifications"}
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Signed in as {currentUser} ({role})
+            </p>
           </div>
           <div className="flex items-center gap-4">
             <Button
@@ -197,14 +261,17 @@ export default function AdminDashboard() {
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-            <div className="hidden md:flex items-center gap-2 bg-primary/10 text-primary px-3 py-1.5 rounded-full border border-primary/20 text-sm font-mono">
-              <Activity className="w-4 h-4 animate-pulse" />
-              SYSTEM_ONLINE
-            </div>
+            {role === "ADMIN" && (
+              <div className="hidden md:flex items-center gap-2 bg-primary/10 text-primary px-3 py-1.5 rounded-full border border-primary/20 text-sm font-mono">
+                <Activity className="w-4 h-4 animate-pulse" />
+                SYSTEM_ONLINE
+              </div>
+            )}
           </div>
         </div>
 
         {/* Top metrics */}
+        {role === "ADMIN" && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card className="p-6 glass-panel cyber-border">
             <h3 className="text-sm font-mono text-muted-foreground mb-2">Total Verifications</h3>
@@ -234,6 +301,7 @@ export default function AdminDashboard() {
             </p>
           </Card>
         </div>
+        )}
 
         {/* Recent Scans Table */}
         <Card className="glass-panel cyber-border overflow-hidden">

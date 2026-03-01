@@ -2,22 +2,29 @@ package com.codex.identity_verifier.util;
 
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 public class InputValidator {
 
     // File validation constants
     private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-    private static final String[] ALLOWED_CONTENT_TYPES = {
+    private static final Set<String> ALLOWED_CONTENT_TYPES = new HashSet<>(Arrays.asList(
         "image/jpeg",
         "image/jpg", 
         "image/png",
         "image/webp",
         "application/pdf"
-    };
+    ));
+    private static final Set<String> ALLOWED_EXTENSIONS = new HashSet<>(Arrays.asList(
+        "jpg", "jpeg", "png", "webp", "pdf"
+    ));
     
     // Security patterns
-    private static final Pattern FILENAME_PATTERN = Pattern.compile("^[a-zA-Z0-9._-]+$");
+    private static final Pattern UNSAFE_FILENAME_PATTERN = Pattern.compile(".*[\\\\/:*?\"<>|].*");
     private static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]{3,20}$");
     private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)[a-zA-Z\\d@$!%*?&]{8,}$");
 
@@ -35,30 +42,40 @@ public class InputValidator {
             return ValidationResult.failure("File size exceeds 10MB limit");
         }
 
-        String contentType = file.getContentType();
-        if (contentType == null) {
-            return ValidationResult.failure("File type not specified");
+        String originalFilename = file.getOriginalFilename();
+        String extension = extractExtension(originalFilename);
+        String contentType = file.getContentType() == null ? "" : file.getContentType();
+
+        boolean validByContentType = ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase(Locale.ROOT))
+                || contentType.toLowerCase(Locale.ROOT).startsWith("image/");
+        boolean validByExtension = extension != null && ALLOWED_EXTENSIONS.contains(extension);
+
+        // Some systems send generic content type (application/octet-stream) for uploads.
+        if (!(validByContentType || validByExtension)) {
+            return ValidationResult.failure("Invalid file type. Allowed formats: JPG, PNG, WEBP, PDF");
         }
 
-        boolean validType = false;
-        for (String allowedType : ALLOWED_CONTENT_TYPES) {
-            if (allowedType.equals(contentType)) {
-                validType = true;
-                break;
+        if (originalFilename != null) {
+            if (originalFilename.contains("..") || UNSAFE_FILENAME_PATTERN.matcher(originalFilename).matches()) {
+                return ValidationResult.failure("Invalid filename characters detected");
+            }
+            if (originalFilename.length() > 255) {
+                return ValidationResult.failure("Filename is too long");
             }
         }
 
-        if (!validType) {
-            return ValidationResult.failure("Invalid file type. Only JPEG, PNG, WEBP, and PDF files are allowed");
-        }
-
-        // Validate filename
-        String originalFilename = file.getOriginalFilename();
-        if (originalFilename != null && !FILENAME_PATTERN.matcher(originalFilename).matches()) {
-            return ValidationResult.failure("Invalid filename characters detected");
-        }
-
         return ValidationResult.success();
+    }
+
+    private static String extractExtension(String filename) {
+        if (filename == null) {
+            return null;
+        }
+        int idx = filename.lastIndexOf('.');
+        if (idx < 0 || idx == filename.length() - 1) {
+            return null;
+        }
+        return filename.substring(idx + 1).toLowerCase(Locale.ROOT);
     }
 
     /**

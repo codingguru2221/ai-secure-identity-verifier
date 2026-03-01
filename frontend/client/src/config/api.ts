@@ -13,6 +13,8 @@ export const API_ENDPOINTS = {
   VERIFICATIONS: apiUrl("/api/verifications"),
   STATS: apiUrl("/api/stats"),
   LOGIN: apiUrl("/api/auth/login"),
+  SIGNUP: apiUrl("/api/auth/signup"),
+  VALIDATE_TOKEN: apiUrl("/api/auth/validate"),
   LOGOUT: apiUrl("/api/auth/logout"),
 } as const;
 

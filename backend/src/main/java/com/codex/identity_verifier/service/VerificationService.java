@@ -47,7 +47,7 @@ public class VerificationService {
      * @param file The document file to verify
      * @return VerificationResponse containing the verification results
      */
-    public VerificationResponse verifyDocument(MultipartFile file) {
+    public VerificationResponse verifyDocument(MultipartFile file, String ownerUsername) {
         String s3Key = null;
         try {
             // 1. Upload file to S3
@@ -112,7 +112,8 @@ public class VerificationService {
                 explanations.toArray(new String[0]), identityInfo, 
                 highestConfidence,
                 isTampered,
-                fileHash
+                fileHash,
+                ownerUsername
             );
             
             // 8. Save record to DynamoDB
@@ -344,7 +345,8 @@ public class VerificationService {
         Map<String, String> identityInfo,
         Double faceMatchConfidence,
         Boolean isTampered,
-        String fileHash) {
+        String fileHash,
+        String ownerUsername) {
 
     VerificationRecord.ExtractedData extractedData =
             VerificationRecord.ExtractedData.builder()
@@ -361,6 +363,7 @@ public class VerificationService {
     return VerificationRecord.builder()
             .fileName(fileName)
             .fileHash(fileHash)
+            .ownerUsername(ownerUsername)
             .s3Key(s3Key)
             .s3Bucket(s3Service.getBucketName()) // Use actual bucket name from S3Service
             .s3ObjectDeleted(deleteUploadedFile)

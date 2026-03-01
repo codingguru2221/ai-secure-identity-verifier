@@ -2,6 +2,7 @@ package com.codex.identity_verifier.controller;
 
 import com.codex.identity_verifier.dto.LoginRequest;
 import com.codex.identity_verifier.dto.LoginResponse;
+import com.codex.identity_verifier.dto.SignupRequest;
 import com.codex.identity_verifier.service.AuthService;
 import com.codex.identity_verifier.util.InputValidator;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,34 +23,20 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest loginRequest) {
         try {
-            // Validate input
+            LoginResponse invalidRequestResponse = invalidLoginResponse();
             if (loginRequest == null || loginRequest.getUsername() == null || loginRequest.getPassword() == null) {
-                return ResponseEntity.badRequest()
-                    .body(LoginResponse.builder()
-                        .token(null)
-                        .username(null)
-                        .role(null)
-                        .expiresIn(null)
-                        .build());
+                return ResponseEntity.badRequest().body(invalidRequestResponse);
             }
 
-            // Validate username and password
             InputValidator.ValidationResult usernameValidation = InputValidator.validateUsername(loginRequest.getUsername());
-            if (!usernameValidation.isValid()) {
-                return ResponseEntity.badRequest()
-                    .body(LoginResponse.builder()
-                        .token(null)
-                        .username(null)
-                        .role(null)
-                        .expiresIn(null)
-                        .build());
+            InputValidator.ValidationResult passwordValidation = InputValidator.validatePassword(loginRequest.getPassword());
+            if (!usernameValidation.isValid() || !passwordValidation.isValid()) {
+                return ResponseEntity.badRequest().body(invalidRequestResponse);
             }
 
-            // Sanitize inputs
             String sanitizedUsername = InputValidator.sanitizeInput(loginRequest.getUsername());
             String sanitizedPassword = InputValidator.sanitizeInput(loginRequest.getPassword());
-            
-            // Create sanitized login request
+
             LoginRequest sanitizedRequest = LoginRequest.builder()
                 .username(sanitizedUsername)
                 .password(sanitizedPassword)
@@ -58,14 +45,46 @@ public class AuthController {
             LoginResponse response = authService.authenticateUser(sanitizedRequest);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                .body(LoginResponse.builder()
-                    .token(null)
-                    .username(null)
-                    .role(null)
-                    .expiresIn(null)
-                    .build());
+            return ResponseEntity.badRequest().body(invalidLoginResponse());
         }
+    }
+
+    @PostMapping("/signup")
+    public ResponseEntity<LoginResponse> signup(@RequestBody SignupRequest signupRequest) {
+        try {
+            LoginResponse invalidRequestResponse = invalidLoginResponse();
+            if (signupRequest == null || signupRequest.getUsername() == null || signupRequest.getPassword() == null) {
+                return ResponseEntity.badRequest().body(invalidRequestResponse);
+            }
+
+            InputValidator.ValidationResult usernameValidation = InputValidator.validateUsername(signupRequest.getUsername());
+            InputValidator.ValidationResult passwordValidation = InputValidator.validatePassword(signupRequest.getPassword());
+            if (!usernameValidation.isValid() || !passwordValidation.isValid()) {
+                return ResponseEntity.badRequest().body(invalidRequestResponse);
+            }
+
+            String sanitizedUsername = InputValidator.sanitizeInput(signupRequest.getUsername());
+            String sanitizedPassword = InputValidator.sanitizeInput(signupRequest.getPassword());
+
+            SignupRequest sanitizedRequest = SignupRequest.builder()
+                .username(sanitizedUsername)
+                .password(sanitizedPassword)
+                .build();
+
+            LoginResponse response = authService.signupUser(sanitizedRequest);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(invalidLoginResponse());
+        }
+    }
+
+    private LoginResponse invalidLoginResponse() {
+        return LoginResponse.builder()
+                .token(null)
+                .username(null)
+                .role(null)
+                .expiresIn(null)
+                .build();
     }
 
     @GetMapping("/validate")

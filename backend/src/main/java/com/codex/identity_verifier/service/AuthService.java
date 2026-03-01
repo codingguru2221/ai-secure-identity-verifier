@@ -2,9 +2,12 @@ package com.codex.identity_verifier.service;
 
 import com.codex.identity_verifier.dto.LoginRequest;
 import com.codex.identity_verifier.dto.LoginResponse;
+import com.codex.identity_verifier.dto.SignupRequest;
+import com.codex.identity_verifier.model.UserAccount;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -18,6 +21,7 @@ import java.util.Date;
 public class AuthService {
 
     private final BCryptPasswordEncoder passwordEncoder;
+    private final UserAccountService userAccountService;
     
     @Value("${jwt.secret:defaultSecretKeyForDevelopmentOnlyChangeInProduction}")
     private String jwtSecret;
@@ -25,26 +29,53 @@ public class AuthService {
     @Value("${jwt.expiration-hours:24}")
     private Long jwtExpirationHours;
 
-    public AuthService() {
+    @Value("${auth.admin.username:admin}")
+    private String adminUsername;
+
+    // bcrypt hash for admin123 (fallback bootstrap admin)
+    @Value("${auth.admin.password-hash:$2a$10$8K1p/a0dhrxiowP.dnkgNORTWgdEDHn5L2/xjpEWuC.QQv4rKO9jO}")
+    private String adminPasswordHash;
+
+    @Autowired
+    public AuthService(UserAccountService userAccountService) {
         this.passwordEncoder = new BCryptPasswordEncoder();
+        this.userAccountService = userAccountService;
     }
 
     public LoginResponse authenticateUser(LoginRequest loginRequest) {
-        // In a real implementation, you would validate against a database
-        // For demo purposes, we'll use hardcoded credentials
         String username = loginRequest.getUsername();
         String password = loginRequest.getPassword();
-        
-        // Demo credentials
-        if ("admin".equals(username) && validatePassword(password, "$2a$10$8K1p/a0dhrxiowP.dnkgNORTWgdEDHn5L2/xjpEWuC.QQv4rKO9jO")) {
-            // admin password: admin123
+
+        // Bootstrap admin from config to avoid lockout in production.
+        if (adminUsername.equals(username) && validatePassword(password, adminPasswordHash)) {
             return generateToken(username, "ADMIN");
-        } else if ("user".equals(username) && validatePassword(password, "$2a$10$8K1p/a0dhrxiowP.dnkgNORTWgdEDHn5L2/xjpEWuC.QQv4rKO9jO")) {
-            // user password: user123
-            return generateToken(username, "USER");
         }
-        
+
+        UserAccount user = userAccountService.getUserByUsername(username);
+        if (user != null && validatePassword(password, user.getPasswordHash())) {
+            String role = user.getRole() != null ? user.getRole() : "USER";
+            return generateToken(username, role);
+        }
+
         throw new RuntimeException("Invalid credentials");
+    }
+
+    public LoginResponse signupUser(SignupRequest signupRequest) {
+        String username = signupRequest.getUsername();
+        String password = signupRequest.getPassword();
+
+        if (adminUsername.equals(username)) {
+            throw new RuntimeException("Username is reserved");
+        }
+
+        UserAccount existing = userAccountService.getUserByUsername(username);
+        if (existing != null) {
+            throw new RuntimeException("Username already exists");
+        }
+
+        String passwordHash = passwordEncoder.encode(password);
+        userAccountService.createUser(username, passwordHash, "USER");
+        return generateToken(username, "USER");
     }
 
     private boolean validatePassword(String rawPassword, String encodedPassword) {

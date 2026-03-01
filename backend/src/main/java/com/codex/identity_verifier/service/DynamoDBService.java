@@ -161,6 +161,25 @@ public class DynamoDBService {
         }
     }
 
+    public List<VerificationRecord> getRecentVerificationsForOwner(String ownerUsername, int limit) {
+        DynamoDbTable<VerificationRecord> verificationTable = enhancedClient
+                .table(tableName, TableSchema.fromBean(VerificationRecord.class));
+
+        try {
+            java.util.List<VerificationRecord> result = new java.util.ArrayList<>();
+            verificationTable.scan(r -> r.limit(Math.max(limit * 5, limit)))
+                    .items()
+                    .stream()
+                    .map(this::decryptRecord)
+                    .filter(item -> ownerUsername.equals(item.getOwnerUsername()))
+                    .limit(limit)
+                    .forEach(result::add);
+            return result;
+        } catch (Exception e) {
+            return new java.util.ArrayList<>();
+        }
+    }
+
     /**
      * Updates a verification record in DynamoDB
      * @param verificationRecord The record to update

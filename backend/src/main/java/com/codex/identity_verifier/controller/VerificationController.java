@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 
 import java.util.HashMap;
 import java.util.List;
@@ -31,9 +33,14 @@ public class VerificationController {
 
     @PostMapping("/verify")
     public ResponseEntity<VerificationResponse> verifyDocument(
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam("file") MultipartFile file,
+            Authentication authentication) {
         
         try {
+            if (authentication == null || authentication.getName() == null) {
+                return ResponseEntity.status(401).build();
+            }
+
             // Validate file using input validator
             InputValidator.ValidationResult fileValidation = InputValidator.validateFile(file);
             if (!fileValidation.isValid()) {
@@ -55,7 +62,7 @@ public class VerificationController {
                      file.getOriginalFilename(), file.getSize());
 
             // Process the file using the service
-            VerificationResponse response = verificationService.verifyDocument(file);
+            VerificationResponse response = verificationService.verifyDocument(file, authentication.getName());
             log.info("Verification completed successfully for file: {}", file.getOriginalFilename());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
@@ -78,9 +85,17 @@ public class VerificationController {
     @GetMapping("/verifications")
     public ResponseEntity<List<VerificationRecord>> getAllVerifications(
             @RequestParam(defaultValue = "50") int limit,
-            @RequestParam(defaultValue = "0") int offset) {
+            @RequestParam(defaultValue = "0") int offset,
+            Authentication authentication) {
         try {
-            List<VerificationRecord> records = dynamoDBService.getRecentVerifications(limit);
+            if (authentication == null || authentication.getName() == null) {
+                return ResponseEntity.status(401).build();
+            }
+
+            boolean isAdmin = hasAdminRole(authentication);
+            List<VerificationRecord> records = isAdmin
+                    ? dynamoDBService.getRecentVerifications(limit)
+                    : dynamoDBService.getRecentVerificationsForOwner(authentication.getName(), limit);
             return ResponseEntity.ok(records);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
@@ -88,10 +103,19 @@ public class VerificationController {
     }
 
     @GetMapping("/verifications/{id}")
-    public ResponseEntity<VerificationRecord> getVerificationById(@PathVariable String id) {
+    public ResponseEntity<VerificationRecord> getVerificationById(@PathVariable String id, Authentication authentication) {
         try {
+            if (authentication == null || authentication.getName() == null) {
+                return ResponseEntity.status(401).build();
+            }
+
             VerificationRecord record = dynamoDBService.getVerificationRecordById(id);
             if (record != null) {
+                boolean isAdmin = hasAdminRole(authentication);
+                boolean isOwner = authentication.getName().equals(record.getOwnerUsername());
+                if (!isAdmin && !isOwner) {
+                    return ResponseEntity.status(403).build();
+                }
                 return ResponseEntity.ok(record);
             } else {
                 return ResponseEntity.notFound().build();
@@ -132,5 +156,17 @@ public class VerificationController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    private boolean hasAdminRole(Authentication authentication) {
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return false;
+        }
+        for (GrantedAuthority authority : authentication.getAuthorities()) {
+            if ("ROLE_ADMIN".equals(authority.getAuthority())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

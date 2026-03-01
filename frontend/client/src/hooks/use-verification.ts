@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { api, type VerificationResultResponse } from "@shared/routes";
 import { API_ENDPOINTS } from "@/config/api";
+import { authHeaders } from "@/lib/auth";
 
 export function useVerifyIdentity() {
   return useMutation({
@@ -11,6 +12,7 @@ export function useVerifyIdentity() {
 
       const response = await fetch(API_ENDPOINTS.VERIFY, {
         method: "POST",
+        headers: authHeaders(),
         body: formData,
       });
 

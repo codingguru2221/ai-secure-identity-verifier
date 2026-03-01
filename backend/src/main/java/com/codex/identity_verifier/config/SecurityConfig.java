@@ -37,12 +37,12 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                     .requestMatchers(
                             "/error",
-                            "/api/verify",
                             "/api/health",
                             "/api/auth/**"
                     ).permitAll()
 
-                    .requestMatchers("/api/stats", "/api/verifications/**").hasRole("ADMIN")
+                    .requestMatchers("/api/stats").hasRole("ADMIN")
+                    .requestMatchers("/api/verifications/**", "/api/verify").authenticated()
 
                     .anyRequest().permitAll()
             )
