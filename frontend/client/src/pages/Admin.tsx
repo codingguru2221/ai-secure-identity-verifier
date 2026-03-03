@@ -22,6 +22,9 @@ interface VerificationRecord {
   createdAt: string;
   riskLevel: string;
   riskScore: number;
+  tamperScore?: number;
+  duplicateDetected?: boolean;
+  duplicateMatches?: number;
   extractedData: {
     name: string;
     idNumber: string;
@@ -31,14 +34,16 @@ interface VerificationRecord {
 
 interface StatsData {
   totalVerifications: number;
-  lowRiskCount: number;
-  mediumRiskCount: number;
+  verifiedCount: number;
+  suspiciousCount: number;
   highRiskCount: number;
+  tamperedCount: number;
+  duplicateCount: number;
   averageRiskScore: number;
   riskDistribution: {
-    low: number;
-    medium: number;
-    high: number;
+    verified: number;
+    suspicious: number;
+    highRisk: number;
   };
 }
 
@@ -283,16 +288,16 @@ export default function AdminDashboard() {
             </p>
           </Card>
           <Card className="p-6 glass-panel border-success/30 bg-success/5">
-            <h3 className="text-sm font-mono text-success/80 mb-2">Low Risk</h3>
+            <h3 className="text-sm font-mono text-success/80 mb-2">Verified</h3>
             <p className="text-4xl font-display font-bold text-success">
-              {stats ? stats.lowRiskCount : '0'}
+              {stats ? stats.verifiedCount : '0'}
             </p>
             <p className="text-xs text-muted-foreground mt-2">
-              {stats ? `${Math.round((stats.lowRiskCount / Math.max(stats.totalVerifications, 1)) * 100)}% clear rate` : '0% clear rate'}
+              {stats ? `${Math.round((stats.verifiedCount / Math.max(stats.totalVerifications, 1)) * 100)}% clear rate` : '0% clear rate'}
             </p>
           </Card>
           <Card className="p-6 glass-panel border-destructive/30 bg-destructive/5 cyber-glow-destructive">
-            <h3 className="text-sm font-mono text-destructive/80 mb-2">High Risk</h3>
+            <h3 className="text-sm font-mono text-destructive/80 mb-2">High-Risk</h3>
             <p className="text-4xl font-display font-bold text-destructive">
               {stats ? stats.highRiskCount : '0'}
             </p>
@@ -347,6 +352,7 @@ export default function AdminDashboard() {
                     <TableHead className="font-mono text-xs text-muted-foreground">EXTRACTED NAME</TableHead>
                     <TableHead className="font-mono text-xs text-muted-foreground">FILE NAME</TableHead>
                     <TableHead className="font-mono text-xs text-muted-foreground">RISK LEVEL</TableHead>
+                    <TableHead className="font-mono text-xs text-muted-foreground">FLAGS</TableHead>
                     <TableHead className="font-mono text-xs text-muted-foreground text-right">SCORE</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -364,19 +370,22 @@ export default function AdminDashboard() {
                         {record.fileName}
                       </TableCell>
                       <TableCell>
-                        {record.riskLevel === 'HIGH RISK' ? (
+                        {record.riskLevel === 'HIGH-RISK' ? (
                           <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 gap-1">
                             <ShieldAlert className="w-3 h-3" /> High ({record.riskScore})
                           </Badge>
-                        ) : record.riskLevel === 'MEDIUM RISK' ? (
+                        ) : record.riskLevel === 'SUSPICIOUS' ? (
                           <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20 gap-1">
-                            <Activity className="w-3 h-3" /> Medium ({record.riskScore})
+                            <Activity className="w-3 h-3" /> Suspicious ({record.riskScore})
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="bg-success/10 text-success border-success/20 gap-1">
-                            <CheckCircle className="w-3 h-3" /> Low ({record.riskScore})
+                            <CheckCircle className="w-3 h-3" /> Verified ({record.riskScore})
                           </Badge>
                         )}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {record.duplicateDetected ? `DUP:${record.duplicateMatches ?? 1}` : "CLEAN"} | TMP:{record.tamperScore ?? 0}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm font-medium">
                         {record.riskScore}%

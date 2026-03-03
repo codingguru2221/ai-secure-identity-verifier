@@ -14,6 +14,7 @@ import software.amazon.awssdk.services.dynamodb.model.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.StreamSupport;
 
 @Service
 public class DynamoDBService {
@@ -177,6 +178,38 @@ public class DynamoDBService {
             return result;
         } catch (Exception e) {
             return new java.util.ArrayList<>();
+        }
+    }
+
+    public long countByFileHash(String fileHash) {
+        if (fileHash == null || fileHash.isBlank()) {
+            return 0L;
+        }
+        DynamoDbTable<VerificationRecord> verificationTable = enhancedClient
+                .table(tableName, TableSchema.fromBean(VerificationRecord.class));
+        try {
+            return StreamSupport.stream(verificationTable.scan().items().spliterator(), false)
+                    .map(this::decryptRecord)
+                    .filter(item -> fileHash.equals(item.getFileHash()))
+                    .count();
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    public long countByIdentitySignatureHash(String identitySignatureHash) {
+        if (identitySignatureHash == null || identitySignatureHash.isBlank()) {
+            return 0L;
+        }
+        DynamoDbTable<VerificationRecord> verificationTable = enhancedClient
+                .table(tableName, TableSchema.fromBean(VerificationRecord.class));
+        try {
+            return StreamSupport.stream(verificationTable.scan().items().spliterator(), false)
+                    .map(this::decryptRecord)
+                    .filter(item -> identitySignatureHash.equals(item.getIdentitySignatureHash()))
+                    .count();
+        } catch (Exception e) {
+            return 0L;
         }
     }
 

@@ -12,6 +12,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.rekognition.RekognitionClient;
 import software.amazon.awssdk.services.textract.TextractClient;
+import software.amazon.awssdk.services.lambda.LambdaClient;
 
 @Configuration
 @Profile("aws")
@@ -69,6 +70,18 @@ public class AwsConfig {
         }
         return TextractClient.builder()
                 .region(Region.of(textractRegion))
+                .credentialsProvider(credentialsProvider)
+                .build();
+    }
+
+    @Bean
+    public LambdaClient lambdaClient(AwsCredentialsProvider credentialsProvider) {
+        String lambdaRegion = System.getenv("AWS_LAMBDA_REGION");
+        if (lambdaRegion == null || lambdaRegion.isEmpty()) {
+            lambdaRegion = System.getProperty("aws.lambda.region", region);
+        }
+        return LambdaClient.builder()
+                .region(Region.of(lambdaRegion))
                 .credentialsProvider(credentialsProvider)
                 .build();
     }

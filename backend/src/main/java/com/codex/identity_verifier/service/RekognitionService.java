@@ -10,7 +10,9 @@ import software.amazon.awssdk.services.rekognition.model.*;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -23,6 +25,12 @@ public class RekognitionService {
     private Double faceMatchThreshold;
     @Value("${aws.rekognition.min-confidence:70.0}")
     private Double minConfidence;
+    @Value("${aws.rekognition.custom-labels-enabled:false}")
+    private boolean customLabelsEnabled;
+    @Value("${aws.rekognition.custom-model-arn:}")
+    private String customModelArn;
+    @Value("${aws.rekognition.custom-min-confidence:70.0}")
+    private Double customMinConfidence;
 
     @Autowired
     public RekognitionService(RekognitionClient rekognitionClient) {
@@ -100,6 +108,8 @@ public class RekognitionService {
      */
     public Map<String, Object> detectImageTampering(byte[] imageData) {
         Map<String, Object> result = new HashMap<>();
+        List<String> tamperSignals = new ArrayList<>();
+        int tamperScore = 0;
         
         try {
             // Convert image to buffered image to check for basic properties
@@ -109,6 +119,8 @@ public class RekognitionService {
                 result.put("isLowQuality", false);
                 result.put("hasUniformBackground", false);
                 result.put("hasSuspiciousContent", false);
+                result.put("tamperScore", 0);
+                result.put("tamperSignals", List.of());
                 result.put("isTampered", false);
                 return result;
             }
@@ -121,6 +133,14 @@ public class RekognitionService {
             // Check for common tampering indicators
             result.put("isLowQuality", image.getWidth() < 300 || image.getHeight() < 300);
             result.put("hasUniformBackground", checkUniformBackground(image));
+            if (Boolean.TRUE.equals(result.get("isLowQuality"))) {
+                tamperScore += 15;
+                tamperSignals.add("Low resolution upload");
+            }
+            if (Boolean.TRUE.equals(result.get("hasUniformBackground"))) {
+                tamperScore += 8;
+                tamperSignals.add("Uniform background anomaly");
+            }
             
             // For actual tampering detection, we'll use Rekognition's moderation detection
             Image rekImage = Image.builder()
@@ -136,6 +156,10 @@ public class RekognitionService {
             
             result.put("moderationLabels", moderationResponse.moderationLabels());
             result.put("hasSuspiciousContent", !moderationResponse.moderationLabels().isEmpty());
+            if (!moderationResponse.moderationLabels().isEmpty()) {
+                tamperScore += 20;
+                tamperSignals.add("Rekognition moderation/content anomaly");
+            }
             
             // Check for text detection which might indicate tampering
             DetectTextRequest textRequest = DetectTextRequest.builder()
@@ -144,6 +168,29 @@ public class RekognitionService {
 
             DetectTextResponse textResponse = rekognitionClient.detectText(textRequest);
             result.put("detectedTexts", textResponse.textDetections());
+
+            // AWS-native advanced signal: Rekognition Custom Labels
+            if (customLabelsEnabled && customModelArn != null && !customModelArn.isBlank()) {
+                try {
+                    DetectCustomLabelsRequest customReq = DetectCustomLabelsRequest.builder()
+                            .projectVersionArn(customModelArn)
+                            .image(rekImage)
+                            .minConfidence(customMinConfidence.floatValue())
+                            .build();
+                    DetectCustomLabelsResponse customResp = rekognitionClient.detectCustomLabels(customReq);
+                    result.put("customLabels", customResp.customLabels());
+                    for (CustomLabel label : customResp.customLabels()) {
+                        String name = label.name() == null ? "" : label.name().toLowerCase();
+                        float confidence = label.confidence() == null ? 0f : label.confidence();
+                        if (name.contains("forg") || name.contains("tamper") || name.contains("edit") || name.contains("fake")) {
+                            tamperScore += Math.min(45, Math.max(10, (int) (confidence / 2)));
+                            tamperSignals.add("Custom model flag: " + label.name() + " (" + Math.round(confidence) + "%)");
+                        }
+                    }
+                } catch (Exception customEx) {
+                    tamperSignals.add("Custom label model unavailable");
+                }
+            }
             
         } catch (Exception e) {
             result.put("error", "Failed to analyze image: " + e.getMessage());
@@ -151,8 +198,10 @@ public class RekognitionService {
             result.put("isLowQuality", false);
         }
         
-        // Assume tampering if suspicious content is detected
-        boolean suspicious = Boolean.TRUE.equals(result.get("hasSuspiciousContent"));
+        tamperScore = Math.min(100, tamperScore);
+        boolean suspicious = tamperScore >= 45 || Boolean.TRUE.equals(result.get("hasSuspiciousContent"));
+        result.put("tamperScore", tamperScore);
+        result.put("tamperSignals", tamperSignals);
         result.put("isTampered", suspicious);
         
         return result;

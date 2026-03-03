@@ -131,9 +131,11 @@ public class VerificationController {
             List<VerificationRecord> records = dynamoDBService.getRecentVerifications(1000);
             
             long totalVerifications = records.size();
-            long lowRisk = records.stream().filter(r -> "LOW RISK".equals(r.getRiskLevel())).count();
-            long mediumRisk = records.stream().filter(r -> "MEDIUM RISK".equals(r.getRiskLevel())).count();
-            long highRisk = records.stream().filter(r -> "HIGH RISK".equals(r.getRiskLevel())).count();
+            long verifiedCount = records.stream().filter(r -> "VERIFIED".equals(r.getRiskLevel())).count();
+            long suspiciousCount = records.stream().filter(r -> "SUSPICIOUS".equals(r.getRiskLevel())).count();
+            long highRiskCount = records.stream().filter(r -> "HIGH-RISK".equals(r.getRiskLevel())).count();
+            long tamperedCount = records.stream().filter(r -> Boolean.TRUE.equals(r.getIsTampered())).count();
+            long duplicateCount = records.stream().filter(r -> Boolean.TRUE.equals(r.getDuplicateDetected())).count();
             
             double avgRiskScore = records.stream()
                 .mapToInt(VerificationRecord::getRiskScore)
@@ -142,14 +144,16 @@ public class VerificationController {
             
             Map<String, Object> stats = new HashMap<>();
             stats.put("totalVerifications", totalVerifications);
-            stats.put("lowRiskCount", lowRisk);
-            stats.put("mediumRiskCount", mediumRisk);
-            stats.put("highRiskCount", highRisk);
+            stats.put("verifiedCount", verifiedCount);
+            stats.put("suspiciousCount", suspiciousCount);
+            stats.put("highRiskCount", highRiskCount);
+            stats.put("tamperedCount", tamperedCount);
+            stats.put("duplicateCount", duplicateCount);
             stats.put("averageRiskScore", Math.round(avgRiskScore * 100.0) / 100.0);
             stats.put("riskDistribution", Map.of(
-                "low", lowRisk,
-                "medium", mediumRisk,
-                "high", highRisk
+                "verified", verifiedCount,
+                "suspicious", suspiciousCount,
+                "highRisk", highRiskCount
             ));
             
             return ResponseEntity.ok(stats);

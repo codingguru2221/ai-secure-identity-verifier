@@ -12,8 +12,9 @@ interface ResultsProps {
 
 export function VerifyResults({ result }: ResultsProps) {
   // Determine colors based on risk level
-  const isHighRisk = result.riskScore >= 75 || result.riskLevel.toLowerCase() === 'high';
-  const isLowRisk = result.riskScore <= 30 || result.riskLevel.toLowerCase() === 'low';
+  const normalizedLevel = (result.riskLevel || "").toUpperCase();
+  const isHighRisk = result.riskScore >= 75 || normalizedLevel === "HIGH-RISK";
+  const isLowRisk = result.riskScore <= 30 || normalizedLevel === "VERIFIED";
   
   const statusColorClass = isHighRisk 
     ? "text-destructive border-destructive/30 bg-destructive/10" 
@@ -57,7 +58,7 @@ export function VerifyResults({ result }: ResultsProps) {
               <div>
                 <p className="text-sm font-mono text-muted-foreground uppercase tracking-widest mb-1">Status</p>
                 <h2 className="text-3xl font-display font-bold text-foreground capitalize">
-                  {result.riskLevel} Risk
+                  {result.riskLevel}
                 </h2>
               </div>
             </div>
