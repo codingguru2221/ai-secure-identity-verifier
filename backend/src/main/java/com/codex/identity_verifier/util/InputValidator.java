@@ -42,7 +42,7 @@ public class InputValidator {
             return ValidationResult.failure("File size exceeds 10MB limit");
         }
 
-        String originalFilename = file.getOriginalFilename();
+        String originalFilename = normalizeFilename(file.getOriginalFilename());
         String extension = extractExtension(originalFilename);
         String contentType = file.getContentType() == null ? "" : file.getContentType();
 
@@ -65,6 +65,23 @@ public class InputValidator {
         }
 
         return ValidationResult.success();
+    }
+
+    /**
+     * Normalizes a filename by stripping any client-side path segments.
+     * This allows files from clients that send full paths (e.g. C:\path\my file.pdf)
+     * while still validating only the actual file name.
+     */
+    private static String normalizeFilename(String filename) {
+        if (filename == null) {
+            return null;
+        }
+        String normalized = filename.replace('\\', '/');
+        int lastSlashIndex = normalized.lastIndexOf('/');
+        if (lastSlashIndex >= 0 && lastSlashIndex < normalized.length() - 1) {
+            normalized = normalized.substring(lastSlashIndex + 1);
+        }
+        return normalized.trim();
     }
 
     private static String extractExtension(String filename) {
